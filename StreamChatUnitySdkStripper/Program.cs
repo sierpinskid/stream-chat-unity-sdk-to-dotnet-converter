@@ -1,68 +1,62 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Reflection;
 using StreamChatUnitySdkStripper;
 
-const string StreamChatUnitySdkRootDirName = "StreamChat";
+const string GhTokenFilename = "private_gh_token.txt";
 
+// TODO: move to config json file
 var config = new UnitySdkUnityEngineStripper.Config
 {
     RootDirName = "StreamChat",
+    LibsDirName = "Libs",
     RootEssentialDirs = new[] { "Core", "Libs" },
+    RootEssentialFiles = new[] { "changelog", "readme" },
+    LibsMode = LibsMode.Console,
+    LibsModeToSourcePathMapping = new Dictionary<LibsMode, string>
+    {
+        { LibsMode.Console, "console/Libs" }
+    },
     VersionRegexPattern = @"SDKVersion\s+=\s+new\s+Version\(\s*([0-9]+),\s*([0-9]+),\s*([0-9]+)\)\s*;",
-    PackageNameTemplate = "DotNet-Chat-SDK-{0}.{1}.{2}",
+    PackageNameTemplate = "stream-chat-dotnet-sdk-{0}.{1}.{2}",
     VersionFilename = "StreamChatLowLevelClient.cs",
+
+    GitHubLibsRepoOwner = "sierpinskid",
+    GitHubLibsRepoName = "stream-chat-sdk-dotnet-dependencies-library",
+
+    GitHubStreamUnitySdkRepoOwner = "GetStream",
+    GitHubStreamUnitySdkRepoName = "stream-chat-unity",
+    GitHubStreamUnitySdkRootDir = "Assets/Plugins/StreamChat/",
+    GitHubStreamUnitySdkRepoDefaultBranchName = "develop"
 };
 
 Console.WriteLine("This tool will strip all of the Unity Engine dependencies from the Stream Unity SDK.");
 Console.WriteLine("Please provide the following arguments.");
 
-var streamChatSdkSourcePath = ReadStreamChatSourcePathArg();
+var ghTokenFilePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), GhTokenFilename);
+
+Logger.Info($"Try load GH token from `{ghTokenFilePath}`");
+
+var ghTokenFile = File.ReadAllLines(ghTokenFilePath).Select(l => l.Trim())
+    .FirstOrDefault(l => !l.StartsWith("//") && l.Length > 0);
+if (string.IsNullOrEmpty(ghTokenFile))
+{
+    Logger.Error(
+        $"Failed to find `{GhTokenFilename}` file. Please create this file with the GitHub access token. Keep this file on local machine only (add it to .gitignore).");
+}
+
+config.GitHubToken = ghTokenFile;
+
+var stopwatch = new Stopwatch();
+stopwatch.Start();
+
 var targetPath = ReadTargetPathArg();
 
 var stripper = new UnitySdkUnityEngineStripper();
-stripper.Execute(streamChatSdkSourcePath, targetPath, config);
+await stripper.ExecuteAsync(targetPath, config);
 
-//Todo: in next iteration we could just download it from GitHub 
-string ReadStreamChatSourcePathArg()
-{
-    while (true)
-    {
-        Console.WriteLine("Provide source path of the Stream Chat Unity SDK:");
-        var pathArg = Console.ReadLine();
-
-        try
-        {
-            Logger.Info($"Searching for `{StreamChatUnitySdkRootDirName}`...");
-
-            var path = Path.GetFullPath(pathArg);
-            var files = Directory.GetDirectories(path, StreamChatUnitySdkRootDirName, SearchOption.AllDirectories);
-
-            if (files.Length == 0)
-            {
-                Logger.Error("Provided directory is empty");
-                continue;
-            }
-
-            if (files.Length != 1)
-            {
-                var sb = new StringBuilder();
-                sb.AppendLine($"Found multiple directories with `{StreamChatUnitySdkRootDirName}` keyword:");
-                foreach (var file in files)
-                {
-                    sb.AppendLine(file);
-                }
-
-                sb.AppendLine("Please provide more specific path");
-                Logger.Error(sb.ToString());
-            }
-
-            return files[0];
-        }
-        catch (Exception e)
-        {
-            Logger.Error($"Provided path `{pathArg}` is invalid and failed with an exception: {e.Message}");
-        }
-    }
-}
+stopwatch.Stop();
+var ts = stopwatch.Elapsed;
+Console.WriteLine($"{Math.Floor(ts.TotalMinutes)}:{ts.ToString("ss\\.ff")}");
 
 string ReadTargetPathArg()
 {
@@ -74,20 +68,12 @@ string ReadTargetPathArg()
         try
         {
             var path = Path.GetFullPath(pathArg);
-
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);
             }
 
-            var files = Directory.GetFiles(path);
-            if (files.Length == 0)
-            {
-                return path;
-            }
-
-            Logger.Error(
-                $"Provided path `{pathArg}` is not empty. Please provide a valid empty path or remove all files and try again.");
+            return path;
         }
         catch (Exception e)
         {
