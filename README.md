@@ -1,5 +1,5 @@
-# Stream Chat Unity SDK Converter
-Tool that generates Stream Chat Dotnet SDK 
+# Stream Chat Unity SDK -> DotNet Converter
+Tool that generates Stream Chat Dotnet SDK package from the [Stream Chat Unity SDK](https://github.com/GetStream/stream-chat-unity)
 
 # The internal process
 1. Download latest default branch (develop) from [Stream Chat Unity SDK](https://github.com/GetStream/stream-chat-unity) repository
